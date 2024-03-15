@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Authors>$(UserName)</Authors>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <AssemblyName>$(UserName).$(MSBuildProjectName)</AssemblyName>
+    <RootNamespace>$(UserName).$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+  </PropertyGroup>
+
+</Project>
