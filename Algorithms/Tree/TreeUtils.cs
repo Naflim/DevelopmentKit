@@ -4,7 +4,6 @@ namespace Naflim.DevelopmentKit.Algorithms.Tree
 {
     public static class TreeUtils
     {
-
         /// <summary>
         /// 层级遍历
         /// </summary>
@@ -21,7 +20,9 @@ namespace Naflim.DevelopmentKit.Algorithms.Tree
                 for (int i = 0; i < list.Count; i++)
                 {
                     action(list[i].GetValue());
-                    newList.AddRange(list[i].GetChildNodes());
+                    var childNodes = list[i].GetChildNodes();
+                    if (childNodes != null)
+                        newList.AddRange(childNodes);
                 }
 
                 list = newList;
@@ -39,6 +40,9 @@ namespace Naflim.DevelopmentKit.Algorithms.Tree
             action(treeNode.GetValue());
             var childNodes = treeNode.GetChildNodes();
 
+            if (childNodes == null)
+                return;
+
             foreach (var child in childNodes)
             {
                 PreorderTraversal(child, action);
@@ -55,12 +59,39 @@ namespace Naflim.DevelopmentKit.Algorithms.Tree
         {
             var childNodes = treeNode.GetChildNodes();
 
-            foreach (var child in childNodes)
+            if (childNodes != null)
             {
-                PostorderTraversal(child, action);
+                foreach (var child in childNodes)
+                {
+                    PostorderTraversal(child, action);
+                }
             }
 
             action(treeNode.GetValue());
+        }
+
+        /// <summary>
+        /// 获取节点所处路由
+        /// </summary>
+        /// <typeparam name="T">节点类型</typeparam>
+        /// <param name="treeNode">节点</param>
+        /// <param name="getName">获取节点名称函数</param>
+        /// <returns>节点所处路由</returns>
+        public static string GetPath<T>(this ITreeNode<T> treeNode, Func<ITreeNode<T>, string> getName)
+        {
+            List<string> pathNodes = new List<string>();
+            ITreeNode<T>? nowNode = treeNode;
+
+            while (nowNode != null)
+            {
+                pathNodes.Add(getName(nowNode));
+                nowNode = nowNode.GetParentNode();
+            }
+
+            pathNodes.Reverse();
+
+            string path = string.Join("/", pathNodes);
+            return $"/{path}";
         }
     }
 }
