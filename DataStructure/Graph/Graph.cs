@@ -4,13 +4,6 @@
 
 using Naflim.DevelopmentKit.Algorithms;
 using System.Collections;
-using System.Collections.Concurrent;
-
-#pragma warning disable CS8600
-#pragma warning disable CS8602
-#pragma warning disable CS8604
-#pragma warning disable CS8618
-#pragma warning disable CS8625
 
 namespace Naflim.DevelopmentKit.DataStructure.Graph
 {
@@ -18,85 +11,54 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
     /// 图结构存储容器
     /// </summary>
     /// <typeparam name="T">存储的元素类型</typeparam>
-    public class Graph<T>
-        : IEnumerable<T>
-        where T : class, IGraphNode<T>
+    public class Graph<T> : IEnumerable<T> where T : notnull
     {
         /// <summary>
-        /// 连接关系表
+        /// 无参构造
         /// </summary>
-        private Dictionary<T, List<T>> connectivity;
-
-        /// <summary>
-        /// 线程安全的连接关系表
-        /// </summary>
-        /// <remarks>用作异步存储</remarks>
-        private ConcurrentDictionary<T, List<T>> connectivityAsync;
+        protected Graph(T origin)
+        {
+            NodeMap = new Dictionary<T, GraphNode<T>>();
+            Origin = new GraphNode<T>(origin);
+            NodeMap[origin] = Origin;
+        }
 
         /// <summary>
         /// 构造函数
         /// </summary>
         /// <param name="origin">源节点</param>
-        public Graph(T origin)
+        public Graph(T origin, Func<T, IEnumerable<T>> getNextNodesFunc)
         {
-            Origin = origin;
+            NodeMap = new Dictionary<T, GraphNode<T>>();
+            Origin = new GraphNode<T>(origin);
+            NodeMap[origin] = Origin;
+
+            StartRetrieval(origin, getNextNodesFunc);
         }
 
         /// <summary>
-        /// 源节点
+        /// 构造函数
         /// </summary>
-        public T Origin { get; set; }
-
-        /// <summary>
-        /// 开始检索图
-        /// </summary>
-        public void StartRetrieval()
+        /// <param name="origin">源节点</param>
+        public Graph(IGraphNode<T> origin)
         {
-            connectivity = new Dictionary<T, List<T>>();
-            AddNextNode(Origin);
+            NodeMap = new Dictionary<T, GraphNode<T>>();
+            var val = origin.GetValue();
+            Origin = new GraphNode<T>(val);
+            NodeMap[val] = Origin;
+
+            StartRetrieval(origin);
         }
 
         /// <summary>
-        /// 以异步形式检索图结构
+        /// 节点映射表
         /// </summary>
-        /// <returns>异步操作</returns>
-        /// <remarks>
-        /// BFS,检索分支时将新分支分配给线程池安排检索
-        /// </remarks>
-        public Task StartRetrievalAsync()
-        {
-            return Task.Factory.StartNew(() =>
-            {
-                connectivityAsync = new ConcurrentDictionary<T, List<T>>();
-                CountdownEvent countdown = new CountdownEvent(1);
-                ThreadPool.GetMaxThreads(out int works, out int coms);
-
-                ThreadPool.QueueUserWorkItem(AddNextNodeAsync,
-                                             new Tuple<T, CountdownEvent>(Origin,
-                                                 countdown));
-                countdown.Wait(180000);
-                connectivity = new Dictionary<T, List<T>>(connectivityAsync);
-            },
-                                         TaskCreationOptions.LongRunning);
-        }
+        protected Dictionary<T, GraphNode<T>> NodeMap { get; set; }
 
         /// <summary>
-        /// 节点关联
+        /// 根结点
         /// </summary>
-        public void NodeAssociation()
-        {
-            HashSet<T> hash = new HashSet<T>(connectivity.Keys);
-            foreach (var item in connectivity)
-            {
-                connectivity[item.Key] = item.Value.Select(v =>
-                {
-                    if (hash.TryGetValue(v, out T target))
-                        return target;
-
-                    return v;
-                }).ToList();
-            }
-        }
+        public GraphNode<T> Origin { get; private set; }
 
         /// <summary>
         /// 获取此节点的相邻节点
@@ -105,9 +67,9 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <returns>相邻节点</returns>
         public T[] GetConnectivity(T node)
         {
-            if (connectivity.ContainsKey(node))
+            if (NodeMap.TryGetValue(node, out var graphNode))
             {
-                return connectivity[node].ToArray();
+                return graphNode.NextNodes.Select(v => v.Value).ToArray();
             }
 
             return new T[0];
@@ -120,25 +82,30 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <returns>结果</returns>
         public bool Contains(T node)
         {
-            return connectivity.ContainsKey(node);
+            return NodeMap.ContainsKey(node);
         }
 
         /// <summary>
         /// 添加节点
         /// </summary>
         /// <param name="node">节点</param>
-        public void AddNode(T node)
+        public void AddNode(IGraphNode<T> node)
         {
             var relationNodes = node.GetNextNodes();
+            GraphNode<T> graphNode = new GraphNode<T>(node.GetValue());
+
             foreach (var relationNode in relationNodes)
             {
-                if (connectivity.ContainsKey(relationNode.GetValue()) && !connectivity[relationNode.GetValue()].Contains(relationNode))
+                if (NodeMap.TryGetValue(relationNode.GetValue(), out var gn))
                 {
-                    connectivity[relationNode.GetValue()].Add(node);
+                    if (!gn.NextNodes.Contains(relationNode))
+                        gn.NextNodes.Add(graphNode);
+
+                    graphNode.NextNodes.Add(gn);
                 }
             }
 
-            connectivity[node] = relationNodes.Select(n => n.GetValue()).ToList();
+            NodeMap[node.GetValue()] = graphNode;
         }
 
         /// <summary>
@@ -147,27 +114,45 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <param name="node">节点</param>
         public void RemoveNode(T node)
         {
-            var relationNodes = node.GetNextNodes();
+            if (!NodeMap.TryGetValue(node, out var graphNode))
+                return;
+
+            var relationNodes = graphNode.NextNodes;
             foreach (var relationNode in relationNodes)
             {
-                if (connectivity.ContainsKey(relationNode.GetValue()))
+                if (NodeMap.TryGetValue(relationNode.Value, out var gn))
                 {
-                    connectivity[relationNode.GetValue()].Remove(node);
+                    gn.NextNodes.Remove(graphNode);
                 }
             }
 
-            connectivity.Remove(node);
+            NodeMap.Remove(node);
         }
 
         /// <summary>
         /// 替换节点
         /// </summary>
-        /// <param name="oldNode">就节点</param>
+        /// <param name="oldNode">旧节点</param>
         /// <param name="newNode">新节点</param>
-        public void ReplaceNode(T oldNode, T newNode)
+        public void ReplaceNode(T oldNode, IGraphNode<T> newNode)
         {
             RemoveNode(oldNode);
             AddNode(newNode);
+        }
+
+        /// <summary>
+        /// 替换节点
+        /// </summary>
+        /// <param name="oldNode">旧节点</param>
+        /// <param name="newNode">新节点</param>
+        public void ReplaceNode(T oldNode, T newNode)
+        {
+            if (NodeMap.TryGetValue(oldNode, out var graphNode))
+            {
+                graphNode.Value = newNode;
+                NodeMap.Remove(oldNode);
+                NodeMap[newNode] = graphNode;
+            }
         }
 
         /// <summary>
@@ -178,14 +163,14 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <param name="filter">过滤器</param>
         /// <returns>全部路径</returns>
         /// <exception cref="ArgumentException">目标点不在图内</exception>
-        public List<List<T>> GetAllPathsByDFS(T start, T end, Func<T[], T, bool> filter = null)
+        public List<List<T>> GetAllPathsByDFS(T start, T end, Func<T[], T, bool>? filter = null)
         {
-            if (!connectivity.ContainsKey(start))
+            if (!NodeMap.ContainsKey(start))
             {
                 throw new ArgumentException("起点不在图中", nameof(start));
             }
 
-            if (!connectivity.ContainsKey(end))
+            if (!NodeMap.ContainsKey(end))
             {
                 throw new ArgumentException("终点不在图中", nameof(end));
             }
@@ -201,14 +186,14 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <param name="filter">过滤器</param>
         /// <returns>全部路径</returns>
         /// <exception cref="ArgumentException">目标点不在图内</exception>
-        public List<List<T>> GetAllPathsByBFS(T start, T end, Func<T[], T, bool> filter = null)
+        public List<List<T>> GetAllPathsByBFS(T start, T end, Func<T[], T, bool>? filter = null)
         {
-            if (!connectivity.ContainsKey(start))
+            if (!NodeMap.ContainsKey(start))
             {
                 throw new ArgumentException("起点不在图中", nameof(start));
             }
 
-            if (!connectivity.ContainsKey(end))
+            if (!NodeMap.ContainsKey(end))
             {
                 throw new ArgumentException("终点不在图中", nameof(end));
             }
@@ -257,12 +242,12 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <exception cref="ArgumentException">目标点不在图内</exception>
         public List<T> GetShortestPathByBFS(T start, T end, Func<T[], T, bool>? filter = null)
         {
-            if (!connectivity.ContainsKey(start))
+            if (!NodeMap.ContainsKey(start))
             {
                 throw new ArgumentException("起点不在图中", nameof(start));
             }
 
-            if (!connectivity.ContainsKey(end))
+            if (!NodeMap.ContainsKey(end))
             {
                 throw new ArgumentException("终点不在图中", nameof(end));
             }
@@ -279,6 +264,9 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
 
                 foreach (var item in cache)
                 {
+                    if (item.Last == null)
+                        continue;
+
                     T node = item.Last.Value;
                     accessed.Add(node);
                     if (node.Equals(end))
@@ -313,19 +301,22 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// Dijkstra算法的实现
         /// 权值不可出现负数
         /// </remarks>
-        public List<T> Dijkstra(T start, T end, Func<T, T, double> weight, Func<T, bool> filter = null)
+        public List<T> Dijkstra(T start, T end, Func<T, T, double> weight, Func<T, bool>? filter = null)
         {
-            Dictionary<T, Tuple<double, T, bool>> dic = new Dictionary<T, Tuple<double, T, bool>>();
-            foreach (var item in connectivity)
+            if (!NodeMap.TryGetValue(start, out var startNode) || !NodeMap.TryGetValue(end, out var endNode))
+                return new List<T>();
+
+            Dictionary<GraphNode<T>, Tuple<double, GraphNode<T>?, bool>> dic = new Dictionary<GraphNode<T>, Tuple<double, GraphNode<T>?, bool>>();
+            foreach (var item in NodeMap)
             {
-                dic[item.Key] = new Tuple<double, T, bool>(double.MaxValue, null, false);
+                dic[item.Value] = new Tuple<double, GraphNode<T>?, bool>(double.MaxValue, null, false);
             }
 
-            dic[start] = new Tuple<double, T, bool>(0, null, true);
-            T pointer = start;
-            var accessed = new HashSet<T>();
+            dic[startNode] = new Tuple<double, GraphNode<T>?, bool>(0, null, true);
+            GraphNode<T> pointer = startNode;
+            var accessed = new HashSet<GraphNode<T>>();
 
-            while (!pointer.Equals(end))
+            while (!pointer.Value.Equals(end))
             {
                 pointer = Dijkstra(dic,
                                    accessed,
@@ -340,10 +331,13 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
             }
 
             List<T> result = new List<T>();
-            while (!pointer.Equals(start))
+            while (!pointer.Value.Equals(start))
             {
-                result.Add(pointer);
-                pointer = dic[pointer].Item2;
+                result.Add(pointer.Value);
+                if (dic[pointer].Item2 is not GraphNode<T> p)
+                    break;
+
+                pointer = p;
             }
 
             result.Add(start);
@@ -380,30 +374,125 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <param name="low">强连通分量low</param>
         public void Tarjan(out List<T> cutVertexs, out List<(T, T)> bridge, out Dictionary<T, int> dfn, out Dictionary<T, int> low)
         {
-            Tarjan(out cutVertexs, out bridge, out Dictionary<T, (T prev, int dfn, int low)> tarjanData);
+            Tarjan(out cutVertexs, out bridge, out Dictionary<GraphNode<T>, (GraphNode<T>? prev, int dfn, int low)> tarjanData);
             dfn = new Dictionary<T, int>();
             low = new Dictionary<T, int>();
             foreach (var item in tarjanData)
             {
-                dfn[item.Key] = item.Value.dfn;
-                low[item.Key] = item.Value.low;
+                dfn[item.Key.Value] = item.Value.dfn;
+                low[item.Key.Value] = item.Value.low;
             }
         }
 
-        private void Tarjan(out List<T> cutVertexs, out List<(T, T)> bridge, out Dictionary<T, (T prev, int dfn, int low)> tarjanData)
+        /// <summary>
+        /// 节点关联
+        /// </summary>
+        /// <remarks>
+        /// 统一节点引用
+        /// </remarks>
+        protected void NodeAssociation()
+        {
+            HashSet<GraphNode<T>> hash = new HashSet<GraphNode<T>>(NodeMap.Values);
+
+            foreach (var node in NodeMap.Values)
+            {
+                var nextNodes = node.NextNodes;
+                for (int i = 0; i < nextNodes.Count; i++)
+                {
+                    if (hash.TryGetValue(nextNodes[i], out var target))
+                        nextNodes[i] = target;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 开始检索图
+        /// </summary>
+        /// <param name="source">源数据</param>
+        /// <param name="getNextNodesFunc">获取相邻节点方法</param>
+        protected void StartRetrieval(T source, Func<T, IEnumerable<T>> getNextNodesFunc)
+        {
+            Queue<T> queue = new Queue<T>();
+            queue.Enqueue(source);
+
+            while (queue.Count > 0)
+            {
+                var pending = queue.Dequeue();
+                var pendingNode = NodeMap[pending];
+                var nextNodes = getNextNodesFunc(pending);
+
+                foreach (T node in nextNodes)
+                {
+                    GraphNode<T> graphNode;
+                    if (NodeMap.ContainsKey(node))
+                    {
+                        graphNode = NodeMap[node];
+                    }
+                    else
+                    {
+                        graphNode= new GraphNode<T>(node);
+                        NodeMap[node]= graphNode;
+                        queue.Enqueue(node);
+                    }
+
+                    pendingNode.NextNodes.Add(graphNode);
+                }
+            }
+
+            NodeAssociation();
+        }
+
+        /// <summary>
+        /// 开始检索图
+        /// </summary>
+        /// <param name="source">源数据</param>
+        protected void StartRetrieval(IGraphNode<T> source)
+        {
+            Queue<IGraphNode<T>> queue = new Queue<IGraphNode<T>>();
+            queue.Enqueue(source);
+
+            while (queue.Count > 0)
+            {
+                var pending = queue.Dequeue();
+                var pendingNode = NodeMap[pending.GetValue()];
+                var nextNodes = pending.GetNextNodes();
+
+                foreach (var node in nextNodes)
+                {
+                    var nodeVal = node.GetValue();
+                    GraphNode<T> graphNode;
+                    if (NodeMap.ContainsKey(nodeVal))
+                    {
+                        graphNode = NodeMap[nodeVal];
+                    }
+                    else
+                    {
+                        graphNode = new GraphNode<T>(nodeVal);
+                        NodeMap[nodeVal] = graphNode;
+                        queue.Enqueue(node);
+                    }
+
+                    pendingNode.NextNodes.Add(graphNode);
+                }
+            }
+
+            NodeAssociation();
+        }
+
+        private void Tarjan(out List<T> cutVertexs, out List<(T, T)> bridge, out Dictionary<GraphNode<T>, (GraphNode<T>? prev, int dfn, int low)> tarjanData)
         {
             cutVertexs = new List<T>();
             bridge = new List<(T, T)>();
-            Stack<T> stack = new Stack<T>();
+            Stack<GraphNode<T>> stack = new Stack<GraphNode<T>>();
             stack.Push(Origin);
-            var dic = new Dictionary<T, (T prev, int dfn, int low)>();
+            var dic = new Dictionary<GraphNode<T>, (GraphNode<T>? prev, int dfn, int low)>();
             int count = 1;
             dic[Origin] = new(null, count, count);
             int rootSonCount = 0;
             while (stack.Count > 0)
             {
                 var now = stack.Peek();
-                var next = GetConnectivity(now).Where(n => !dic.ContainsKey(n)).FirstOrDefault();
+                var next = now.NextNodes.Where(n => !dic.ContainsKey(n)).FirstOrDefault();
                 if (next != null)
                 {
                     if (now.Equals(Origin))
@@ -421,7 +510,7 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
 
                     var nowVal = dic[now];
                     int low;
-                    var lows = GetConnectivity(now).Where(n => !n.Equals(dic[now].prev)).Select(n => dic[n].low).ToArray();
+                    var lows = now.NextNodes.Where(n => !n.Equals(dic[now].prev)).Select(n => dic[n].low).ToArray();
                     if (lows.Length == 0)
                     {
                         low = dic[now].low;
@@ -432,16 +521,16 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
                         dic[now] = (nowVal.prev, nowVal.dfn, low);
                     }
 
-                    if (lows.Length > 0 && low >= dic[nowVal.prev].dfn)
-                        cutVertexs.Add(now);
+                    if (nowVal.prev != null && lows.Length > 0 && low >= dic[nowVal.prev].dfn)
+                        cutVertexs.Add(now.Value);
 
-                    if (low > dic[nowVal.prev].dfn)
-                        bridge.Add((nowVal.prev, now));
+                    if (nowVal.prev != null && low > dic[nowVal.prev].dfn)
+                        bridge.Add((nowVal.prev.Value, now.Value));
                 }
             }
 
             if (rootSonCount > 1)
-                cutVertexs.Add(Origin);
+                cutVertexs.Add(Origin.Value);
 
             tarjanData = dic;
         }
@@ -452,7 +541,7 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// <returns>用于循环访问集合的枚举数</returns>
         public IEnumerator<T> GetEnumerator()
         {
-            return connectivity.Keys.GetEnumerator();
+            return NodeMap.Keys.GetEnumerator();
         }
 
         /// <summary>
@@ -464,59 +553,7 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
             return GetEnumerator();
         }
 
-        private void AddNextNode(T node)
-        {
-            if (connectivity.ContainsKey(node))
-            {
-                return;
-            }
-
-            var nextNodes = node.GetNextNodes();
-            var nexts = nextNodes.Select(n => n.GetValue()).ToList();
-            connectivity[node] = nexts;
-            foreach (var item in nexts)
-            {
-                AddNextNode(item);
-            }
-        }
-
-        private void AddNextNodeAsync(object? state)
-        {
-            try
-            {
-                if (!(state is Tuple<T, CountdownEvent> date))
-                {
-                    return;
-                }
-
-                var node = date.Item1;
-                var countdown = date.Item2;
-                connectivityAsync[node] = node.GetNextNodes().Select(n => n.GetValue()).ToList();
-                var nextNodes = connectivityAsync[node].Where(n => !connectivityAsync.ContainsKey(n)).ToArray();
-
-                if (nextNodes.Length == 0)
-                {
-                    countdown.Signal();
-                    return;
-                }
-
-                for (int i = 1; i < nextNodes.Length; i++)
-                {
-                    countdown.TryAddCount();
-
-                    ThreadPool.QueueUserWorkItem(AddNextNodeAsync,
-                                                 new Tuple<T, CountdownEvent>(nextNodes[i], countdown));
-                }
-
-                AddNextNodeAsync(new Tuple<T, CountdownEvent>(nextNodes[0], countdown));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        private List<List<T>> GetAllPathsByDFS(List<T> prefix, T start, T end, Func<T[], T, bool> filter = null)
+        private List<List<T>> GetAllPathsByDFS(List<T> prefix, T start, T end, Func<T[], T, bool>? filter = null)
         {
             List<List<T>> result = new List<List<T>>();
 
@@ -542,29 +579,29 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
             return result;
         }
 
-        private T Dijkstra(Dictionary<T, Tuple<double, T, bool>> dic,
-                           HashSet<T> accessed,
-                           T pointer,
+        private GraphNode<T> Dijkstra(Dictionary<GraphNode<T>, Tuple<double, GraphNode<T>?, bool>> dic,
+                           HashSet<GraphNode<T>> accessed,
+                           GraphNode<T> pointer,
                            Func<T, T, double> weight,
-                           Func<T, bool> filter = null)
+                           Func<T, bool>? filter = null)
         {
-            var nextNodes = GetConnectivity(pointer)
-                .Where(next => !accessed.Contains(next) && (filter?.Invoke(next) ?? true));
+            var nextNodes = pointer.NextNodes
+                .Where(next => !accessed.Contains(next) && (filter?.Invoke(next.Value) ?? true));
 
             foreach (var next in nextNodes)
             {
                 var nextItem = dic[next];
-                var thisWeight = dic[pointer].Item1 + weight(pointer, next);
+                var thisWeight = dic[pointer].Item1 + weight(pointer.Value, next.Value);
                 if (thisWeight < nextItem.Item1)
                 {
-                    dic[next] = new Tuple<double, T, bool>(thisWeight, pointer, false);
+                    dic[next] = new Tuple<double, GraphNode<T>?, bool>(thisWeight, pointer, false);
                 }
             }
 
             accessed.Add(pointer);
 
             var markItem = dic.Where(i => !i.Value.Item3).MinItem(v => v.Value.Item1);
-            dic[markItem.Key] = new Tuple<double, T, bool>(markItem.Value.Item1, markItem.Value.Item2, true);
+            dic[markItem.Key] = new Tuple<double, GraphNode<T>?, bool>(markItem.Value.Item1, markItem.Value.Item2, true);
 
             return markItem.Key;
         }
