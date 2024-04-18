@@ -14,8 +14,9 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
     public class Graph<T> : IEnumerable<T> where T : notnull
     {
         /// <summary>
-        /// 无参构造
+        /// 构造函数
         /// </summary>
+        /// <param name="origin">源节点</param>
         protected Graph(T origin)
         {
             NodeMap = new Dictionary<T, GraphNode<T>>();
@@ -27,6 +28,7 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// 构造函数
         /// </summary>
         /// <param name="origin">源节点</param>
+        /// <param name="getNextNodesFunc">获取相邻节点的函数</param>
         public Graph(T origin, Func<T, IEnumerable<T>> getNextNodesFunc)
         {
             NodeMap = new Dictionary<T, GraphNode<T>>();
@@ -59,6 +61,79 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         /// 根结点
         /// </summary>
         public GraphNode<T> Origin { get; private set; }
+
+        /// <summary>
+        /// 拷贝
+        /// </summary>
+        /// <returns>拷贝对象</returns>
+        public Graph<T> Copy()
+        {
+            Graph<T> newGraph = new Graph<T>(Origin.Value);
+            foreach(var node in NodeMap)
+            {
+                newGraph.NodeMap[node.Key] = node.Value.Copy();
+            }
+
+            return newGraph;
+        }
+
+        /// <summary>
+        /// 分割图
+        /// </summary>
+        /// <param name="cutNodes">分割点集合</param>
+        /// <returns>分割后的图</returns>
+        public List<Graph<T>> Split(IEnumerable<T> cutNodes)
+        {
+            List<Graph<T>> result = new List<Graph<T>>() { this };
+
+            Stack<T> stack = new Stack<T>(cutNodes);
+
+            while (stack.Count > 0)
+            {
+                var cutNode = stack.Pop();
+
+                if (result.FirstOrDefault(g => g.Contains(cutNode)) is Graph<T> target)
+                {
+                    result.Remove(target);
+                    var splits = target.Split(cutNode);
+                    result.AddRange(splits);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 分割图
+        /// </summary>
+        /// <param name="cutNode">分割点</param>
+        /// <returns>分割后的图</returns>
+        /// <exception cref="ArgumentException">割点不在图中</exception>
+        public List<Graph<T>> Split(T cutNode)
+        {
+            if (!NodeMap.ContainsKey(cutNode))
+            {
+                throw new ArgumentException("割点不在图中", nameof(cutNode));
+            }
+
+            List<Graph<T>> result = new List<Graph<T>>();
+
+            var graphNode = NodeMap[cutNode];
+            List<GraphNode<T>> nextNodes = new List<GraphNode<T>>(graphNode.NextNodes);
+
+            RemoveNode(cutNode);
+
+            foreach (var nextNode in nextNodes)
+            {
+                if (result.Any(g => g.Contains(nextNode.Value)))
+                    continue;
+
+                Graph<T> newGraph = new Graph<T>(nextNode);
+                result.Add(newGraph);
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// 获取此节点的相邻节点
