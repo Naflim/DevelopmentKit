@@ -63,6 +63,11 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         public GraphNode<T> Origin { get; private set; }
 
         /// <summary>
+        /// 节点数
+        /// </summary>
+        public int Count => NodeMap.Count;
+
+        /// <summary>
         /// 拷贝
         /// </summary>
         /// <returns>拷贝对象</returns>
@@ -74,6 +79,7 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
                 newGraph.NodeMap[node.Key] = node.Value.Copy();
             }
 
+            newGraph.NodeAssociation();
             return newGraph;
         }
 
