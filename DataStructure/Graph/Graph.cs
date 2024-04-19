@@ -92,11 +92,11 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
         {
             List<Graph<T>> result = new List<Graph<T>>() { this };
 
-            Stack<T> stack = new Stack<T>(cutNodes);
+            Queue<T> queue = new Queue<T>(cutNodes);
 
-            while (stack.Count > 0)
+            while (queue.Count > 0)
             {
-                var cutNode = stack.Pop();
+                var cutNode = queue.Dequeue();
 
                 if (result.FirstOrDefault(g => g.Contains(cutNode)) is Graph<T> target)
                 {
