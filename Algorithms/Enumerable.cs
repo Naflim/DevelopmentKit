@@ -266,7 +266,7 @@ namespace Naflim.DevelopmentKit.Algorithms
         /// <param name="gruops">分组</param>
         /// <param name="key">键</param>
         /// <param name="item">成员</param>
-        public static void AddGruopItem<TKey, TItem>(this Dictionary<TKey, List<TItem>> gruops, TKey key, TItem item)
+        public static void AddGruopItem<TKey, TItem>(this IDictionary<TKey, List<TItem>> gruops, TKey key, TItem item)
              where TKey : IComparable<TKey>
         {
             if (gruops.ContainsKey(key))
@@ -276,6 +276,25 @@ namespace Naflim.DevelopmentKit.Algorithms
             else
             {
                 gruops[key] = new List<TItem> { item };
+            }
+        }
+
+        /// <summary>
+        /// 随机打乱序列元素
+        /// </summary>
+        /// <typeparam name="T">序列类型</typeparam>
+        /// <param name="list">序列</param>
+        public static void Shuffle<T>(this IList<T> list)
+        {
+            Random rng = new Random();
+            int n = list.Count;
+            while (n > 1)
+            {
+                n--;
+                int k = rng.Next(n + 1);
+                T value = list[k];
+                list[k] = list[n];
+                list[n] = value;
             }
         }
 

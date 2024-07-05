@@ -16,6 +16,10 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
     {
         private ConcurrentDictionary<T, List<T>>? _nodeMapAsync;
 
+        /// <summary>
+        /// 无参构造
+        /// </summary>
+        /// <param name="origin">源结点</param>
         public GraphAsync(T origin) : base(origin)
         {
         }

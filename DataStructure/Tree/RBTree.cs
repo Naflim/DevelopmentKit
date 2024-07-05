@@ -10,6 +10,7 @@ namespace Naflim.DevelopmentKit.Tree
 #pragma warning disable CS8600
 #pragma warning disable CS8602
 #pragma warning disable CS8604
+#pragma warning disable CS1591
 
     /// <summary>
     /// 红黑树原型

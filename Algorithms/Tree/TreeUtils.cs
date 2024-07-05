@@ -2,6 +2,9 @@
 
 namespace Naflim.DevelopmentKit.Algorithms.Tree
 {
+    /// <summary>
+    /// 树结构扩展方法
+    /// </summary>
     public static class TreeUtils
     {
         /// <summary>

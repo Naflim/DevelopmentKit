@@ -4,7 +4,7 @@
 
 using System.Diagnostics;
 
-namespace Naflim.DevelopmentKit.Algorithms.Graph
+namespace Naflim.DevelopmentKit.Algorithms.NP_Hard
 {
     /// <summary>
     /// 基于蚁群算法(Ant Colony Optimization)解决旅行商问题(Traveling Salesman Problem)
@@ -174,7 +174,7 @@ namespace Naflim.DevelopmentKit.Algorithms.Graph
         /// <summary>
         /// 获取最优路径
         /// </summary>
-        /// <param name="start">起点</param
+        /// <param name="start">起点</param>
         /// <param name="bestTourLength">最优路径长度</param>
         /// <returns>最优路径</returns>
         /// <remarks>
@@ -334,14 +334,6 @@ namespace Naflim.DevelopmentKit.Algorithms.Graph
             T destinationCity = cities[destinationCityIndex];
             int count = 0;
 
-            //double[] probabilitys = new double[cities.Length];
-            //for (int i = 0; i < cities.Length; i++)
-            //{
-            //    var city = cities[i];
-            //    probabilitys[i] = (Math.Pow(pheromones[currentCityIndex, i], ALPHA) *
-            //            Math.Pow(1.0 / distanceFunction(currentCity, city), BETA)) / sumProb;
-            //}
-
             /*
              * 循环直到蚂蚁选择一个城市
              * 400为循环的阈值
@@ -355,8 +347,8 @@ namespace Naflim.DevelopmentKit.Algorithms.Graph
                 if (!currentAnt.HaveBeen.Contains(destinationCity) && !destinationCity.Equals(end))
                 {
                     //计算移动概率
-                    var moveProb = (Math.Pow(pheromones[currentCityIndex, destinationCityIndex], ALPHA) *
-                                    Math.Pow(1.0 / distanceFunction(currentCity, destinationCity), BETA)) / sumProb;
+                    var moveProb = Math.Pow(pheromones[currentCityIndex, destinationCityIndex], ALPHA) *
+                                    Math.Pow(1.0 / distanceFunction(currentCity, destinationCity), BETA) / sumProb;
 
                     //Console.WriteLine(moveProb);
 
@@ -447,7 +439,7 @@ namespace Naflim.DevelopmentKit.Algorithms.Graph
                     pheromones[i, k] *= 1.0 - RHO;
 
                     //pheromone levels should always be at base levels
-                    if (pheromones[i, k] < (1.0 / cities.Length))
+                    if (pheromones[i, k] < 1.0 / cities.Length)
                     {
                         pheromones[i, k] = 1.0 / cities.Length;
                     }
@@ -509,7 +501,7 @@ namespace Naflim.DevelopmentKit.Algorithms.Graph
             }
 
             //将最佳局部长度与全局长度进行比较并相应更新
-            if ((bestLocalTour < bestTourLength) || (bestTourLength == -1))
+            if (bestLocalTour < bestTourLength || bestTourLength == -1)
             {
                 bestTour = antColony[saveIndex].Tour;
                 bestTourLength = bestLocalTour;
