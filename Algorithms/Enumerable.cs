@@ -267,7 +267,6 @@ namespace Naflim.DevelopmentKit.Algorithms
         /// <param name="key">键</param>
         /// <param name="item">成员</param>
         public static void AddGruopItem<TKey, TItem>(this IDictionary<TKey, List<TItem>> gruops, TKey key, TItem item)
-             where TKey : IComparable<TKey>
         {
             if (gruops.ContainsKey(key))
             {
@@ -277,6 +276,29 @@ namespace Naflim.DevelopmentKit.Algorithms
             {
                 gruops[key] = new List<TItem> { item };
             }
+        }
+
+        /// <summary>
+        /// 反射字典
+        /// </summary>
+        /// <typeparam name="TKey">原字典键类型</typeparam>
+        /// <typeparam name="TValue">原字典值类型</typeparam>
+        /// <param name="dic">原字典</param>
+        /// <returns>反射后字典</returns>
+        public static Dictionary<TValue, List<TKey>> Reflex<TKey, TValue>(this IDictionary<TKey, List<TValue>> dic)
+            where TValue : notnull
+        {
+            Dictionary<TValue, List<TKey>> result = new Dictionary<TValue, List<TKey>>();
+
+            foreach (var item in dic)
+            {
+                foreach (var val in item.Value)
+                {
+                    result.AddGruopItem(val, item.Key);
+                }
+            }
+
+            return result;
         }
 
         /// <summary>

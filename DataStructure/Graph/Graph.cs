@@ -681,10 +681,17 @@ namespace Naflim.DevelopmentKit.DataStructure.Graph
 
             accessed.Add(pointer);
 
-            var markItem = dic.Where(i => !i.Value.Item3).MinItem(v => v.Value.Item1);
-            dic[markItem.Key] = new Tuple<double, GraphNode<T>?, bool>(markItem.Value.Item1, markItem.Value.Item2, true);
+            KeyValuePair<GraphNode<T>, Tuple<double, GraphNode<T>?, bool>>? markItem = null;
+            foreach (var item in dic)
+            {
+                if (!item.Value.Item3 && (markItem == null || item.Value.Item1 < markItem.Value.Value.Item1))
+                {
+                    markItem = item;
+                }
+            }
 
-            return markItem.Key;
+            dic[markItem!.Value.Key] = new Tuple<double, GraphNode<T>?, bool>(markItem.Value.Value.Item1, markItem.Value.Value.Item2, true);
+            return markItem.Value.Key;
         }
     }
 }
